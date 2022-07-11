@@ -1,0 +1,200 @@
+
+<<section04_setup, echo=FALSE, include=FALSE>>=
+knitr::opts_chunk$set(cache = TRUE, tidy = FALSE, fig.path = "figures/",
+                      cache.path = "cache/s04/", warning = FALSE,
+                      error = FALSE, message = FALSE, echo = FALSE)
+
+source("R/packages.R")
+CLEANUP <- TRUE
+
+default_opts <- options()
+wendland_opts <- list(
+  wendland.numint.abstol = .Machine$double.eps^0.5,
+  wendland.numint.reltol = .Machine$double.eps^0.25,
+  wendland.numint.subintervals = 50,
+  wendland.numint.qag_key = 6,
+  wendland.cov.eps = .Machine$double.eps^0.5)
+options(wendland_opts)
+options(spam.nearestdistnnz=c(1.2e6, 1e4))
+
+random_seed <- 75
+n <- 200
+digits <- 2
+dist_resolution <- 5e-3
+
+abserr_breaks <- c(0, 1e-6, 1e-5, 1e-4, 1e-3, Inf)
+discrete_cols <- RColorBrewer::brewer.pal(5, "Greys")
+
+# Covariance parameters and arguments
+target_theta <- list(range = 1, sill = 1, kappa = seq(0, 1.25, 0.05), mu = 0,
+  nugget = 0)
+target_args <- list(interp.method = c("linear", "cspline", "polynomial"),
+  interp.num_support = seq(4, 100, by = 4))
+
+set.seed(random_seed)
+@
+
+<<section04_compute_dmat>>=
+locs <- data.frame(x = runif(n), y = runif(n))
+dmat <- spam::nearest.dist(locs, locs, delta = sqrt(2))
+@
+
+<<section04_compute_abserr>>=
+askey_ptw_comparison <- covDiagFactory(target_covariance = cov.wendland,
+  diagnostic_funs = c("point_diagnostics"), reference_covariance = cov.askey,
+  reference_cov.args = list())
+
+plot_data <- askey_ptw_comparison(target_theta_list = target_theta,
+  target_args_list = target_args, grid_resolution = 1000)
+@
+
+
+
+%===============================================================================
+% Definitions of chunks to be used as child chunks
+%===============================================================================
+
+<<example_direct_misspecification_field, eval=FALSE, fig.height=4>>=
+# Used to generate plots of covariance matrices Sigma
+Sigma <- cov.wendland(dmat, theta = c(fixed_range, 1, 0, 0, 0))
+cholS <- spam::chol.spam(Sigma, pivot = "RCM")
+plot_Sigma <- Sigma[cholS@pivot, cholS@pivot]
+par(mar = c(1.1,1.1,1.1,1.1))
+image(plot_Sigma, xlab = "", ylab = "", xaxt = "n", yaxt = "n")
+par(mar = c(5.1,4.1,4.1,2.1))
+@
+
+
+%===============================================================================
+\section{Technical details\label{sec:techdetails}}
+%===============================================================================
+
+
+%===============================================================================
+\subsection{Implementation of generalized Wendland covariance function}
+%===============================================================================
+
+The integral is evaluated via the numerical integration methods provided by the GSL C library. The covariance function itself is implemented as a C++ class and made accessible in R through \pkg{Rcpp} \citep{pkg-Rcpp}.
+
+
+
+%===============================================================================
+\subsection{Integration methods}
+%===============================================================================
+
+The three available options are
+\begin{itemize}
+  \item non-adaptive Gauss-Kronrod integration (QNG, default),  % some general or specific reference for these
+  \item adaptive integration (QAG),
+  \item adaptive integration with singularities (QAGS).
+\end{itemize}
+
+Figure~\ref{fig:abserr-interp-askey} provides a visual comparison of the results obtained using QNG, QAG, and QAGS integration in the upper left panel, plotting the absolute error in comparison to the Askey function. As immediately apparent, all integration configurations perform well within double precision for whole numbered $\mu$. For rational valued $\mu$, on the other hand, the absolute error just falls short of the single precision threshold, and even slightly exceeds it when using QNG integration. Overall, QAG integration with a high key value performed best among all configurations.
+
+
+
+%===============================================================================
+\subsection{Covariance interpolation \label{subsec:covinterp}}
+%===============================================================================
+
+The three options currently implemented are
+\begin{itemize}
+  \item linear interpolation,
+  \item polynomial interpolation,
+  \item Cubic spline interpolation.
+\end{itemize}
+
+These tend to behave very differently with respect to the choice of the number of support points~$k$. Figure~\ref{fig:abserr-interp-askey} shows the absolute error of the interpolated covariance functions compared to the Askey function.
+
+\begin{figure}[!ht]
+\centering
+<<interp_wend_askey_plot>>=
+plot_data$point_diagnostics %>%
+  select(target.interp.num_support, target.interp.method, target.kappa,
+    max_absolute_error) %>%
+  mutate(max_abserr_discrete = cut(max_absolute_error, breaks = abserr_breaks)) %>%
+  unique() %>%
+  ggplot() +
+  geom_tile(aes(x = target.kappa, y = target.interp.num_support,
+    fill = max_abserr_discrete)) +
+  facet_wrap(~target.interp.method, nrow = 3) +
+  xlab("Kappa") +
+  ylab("Support points") +
+  scale_fill_discrete(type = discrete_cols) +
+  guides(fill = guide_legend(title="Maximum absolute Error",
+    title.position = "top", title.hjust = 0.5)) +
+  theme_minimal()
+@
+\caption{Absolute error of interpolation methods relative to Askey function. Dashed line corresponds to single precision and dotted line to double precision. y-axis is $\log_{10}$ scaled.\label{fig:abserr-interp-askey}}
+\end{figure}
+
+The benchmark against the Askey function shows that polynomial interpolation can potentially outperform the other two using fewer support points, but lacks stability. It tends to explode if using too many support points, and only behaves consistently for whole numbered $\mu$, in which case its absolute error does not exceed the single precision threshold. Linear interpolation, on the other hand, performs very consistently, even for real valued $\mu$. The downside is that it requires a substantial number of support points to obtain approximations with single precision absolute errors. To put this into perspective, linear interpolation would still be worthwhile when working with large data sets, especially since it is the most robust method with regards to  $\mu$. Finally, cubic spline interpolation achieves absolute errors below single precision threshold with moderately many support points, and below double precision using a large number of support points.
+
+One thing users should keep in mind is that the results shown in Figure~\ref{fig:abserr-interp-askey} also depend on the choice of the numeric tolerances. For example, tuning these parameters can help attenuate the instability of polynomial interpolation, at least to an extent. Users may want to explore feasible settings using the \code{cov.wendland.diagnostics()} function. For applications such as maximum likelihood estimation, on the other hand, the author recommends choosing either linear or cubic spline interpolation with a reasonably large number of support points.
+
+
+
+%===============================================================================
+\subsection{Direct misspecification}
+%===============================================================================
+
+The range parameter is typically estimated jointly with the other covariance parameters. Direct misspecification is the deliberate fixing of the range at an arbitrary value. Note that this will effectively bias the estimates at least with respect to the range parameter. The motivation for this compromise is twofold: firstly, fixing the range removes one parameter to estimate, resulting in a substantial reduction of computation time. Secondly, reducing the range also reduces the number of non-zero entries in the covariance matrix $\Sigma$, which translates into an additional reduction in computation time. The effect of varying ranges on the sparsity of a given covariance matrix is illustrated in Figure~\ref{fig:range-sparsity}, where sparsity is described as a function of range, and in Figure~\ref{fig:perm-cov-mat} which presents the actual covariance matrices at specific ranges.
+
+To make use of this option for arbitrary covariance functions, users can set the \code{fixed\_range\_value} argument in \code{covarianceFactory}. This will be further illustrated in the next section.
+
+\begin{figure}
+\centering
+
+\begin{subfigure}{0.45\textwidth}
+<<example_direct_misspecification_sparse>>=
+fixed_range <- seq(0, sqrt(2), dist_resolution)[-1]
+sparsity <- numeric(length(fixed_range))
+
+for (i in seq_len(length(fixed_range))){
+  Sigma <- cov.wendland(dmat, theta = c(fixed_range[i], 1, 2, 0, 0))
+  sparsity[i] <- length(Sigma@entries)/prod(Sigma@dimension)
+}
+plot(0, type = "n", xlim = c(0, sqrt(2)), ylim = c(0, 1), xlab = "Range",
+  ylab = "Fraction of non-zero entries")
+lines(fixed_range, sparsity)
+@
+\caption{Range and sparsity.\label{fig:range-sparsity}}
+\end{subfigure}
+\begin{subfigure}[b]{0.45\textwidth}
+\centering
+<<example_misspec_field1>>=
+fixed_range <- 0.6
+<<example_direct_misspecification_field>>
+@
+\caption{$\beta=0.6$}
+\end{subfigure}
+
+\begin{subfigure}[b]{0.45\textwidth}
+\centering
+<<example_misspec_field2>>=
+fixed_range <- 0.4
+<<example_direct_misspecification_field>>
+@
+\caption{$\beta=0.4$}
+\end{subfigure}
+\begin{subfigure}[b]{0.45\textwidth}
+\centering
+<<example_misspec_field3>>=
+fixed_range <- 0.2
+<<example_direct_misspecification_field>>
+@
+\caption{$\beta = 0.2$}
+\end{subfigure}
+\caption{Functional relationship between range and sparsity, and permutated covariance matrices obtained using range $\beta=\{0.6,~0.4,~0.2\}$.\label{fig:perm-cov-mat}}
+\end{figure}
+
+
+
+%===============================================================================
+
+<<section04-cleanup, echo=FALSE, include=FALSE, eval=CLEANUP>>=
+options(default_opts)
+rm(list = ls())
+gc()
+@
+

@@ -1,0 +1,16 @@
+
+<<section06_setup, echo=FALSE, include=FALSE>>=
+knitr::opts_chunk$set(cache = FALSE, tidy = TRUE, fig.path = "figures/",
+                      cache.path = "cache/s06/", warning = FALSE,
+                      error = FALSE, message = FALSE, echo = FALSE)
+@
+
+\section{Conclusion}
+
+The preceding sections provided a brief overview of the generalized Wendland covariance function and its properties, and illustrated several of the features which are present within the \pkg{GeneralizedWendland} package. The most important features of this package are the accessible implementation of the generalized Wendland covariance, a framework for direct misspecification of the range parameter, and covariance interpolation. All of these features are of particular usefulness for geostatisticians working with large datasets, as for example obtained from remote sensing. Such applications may benefit from adjustable sparsity.
+
+%===============================================================================
+<<section06-cleanup, include=FALSE>>=
+rm(list = ls())
+gc()
+@

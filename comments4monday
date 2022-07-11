@@ -1,0 +1,26 @@
+1. DESCRIPTION:
+  -  adapt email (non uzh)
+  -  author with list (see spam)
+  -  add josef stocker (me?)
+
+  - `Description`: add approximation ideas.
+  - Roxygen still used?
+
+2. Code/function:
+  - cov.wendland.diagnostics (maybe example in Rd sufficient) what about accumulated_error...?
+  - because optim.parallel is imported, it will always be installed...  (what is the use of isInstalledPackage?
+  - I would not export `isEmptyList`
+
+
+
+3. Vignette: see comments in the Rmd directly
+
+
+4. help files:
+  - Ctrl x-r-k
+  - .control:  cov arguments more inportant, list earlier?
+  - example in cov.wendland.diagnostics
+  - see https://cran.r-project.org/doc/manuals/r-release/R-exts.html#Platform_002dspecific-sections
+  - RShowDoc("KEYWORDS")
+
+

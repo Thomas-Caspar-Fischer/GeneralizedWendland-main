@@ -1,0 +1,72 @@
+\documentclass{article}
+\usepackage[a4paper]{geometry}
+\usepackage{amsmath}
+\usepackage{xfrac}
+\usepackage{url}
+\usepackage{natbib}
+\usepackage{upquote}
+\usepackage{caption}
+\usepackage{subcaption}
+
+\renewcommand{\baselinestretch}{1.2}
+\renewcommand{\textfraction}{0}%0.2     % placement of figures
+\renewcommand{\topfraction}{1}%.3
+\renewcommand{\bottomfraction}{1}%.3
+\renewcommand{\floatpagefraction}{1}%.3
+\setcounter{bottomnumber}{3}%1
+
+\textwidth6.3in
+\textheight9.7in
+\topmargin-45pt
+\oddsidemargin-.15in
+\evensidemargin.15in
+\headsep30pt
+\headheight15pt
+%\footskip20pt
+%\parindent0pt
+\parskip10pt plus2pt minus1pt
+
+\makeatletter
+\newcommand\code{\bgroup\@makeother\_\@makeother\~\@makeother\$\@codex}
+\def\@codex#1{{\normalfont\ttfamily\hyphenchar\font=-1 #1}\egroup}
+%%\let\code=\texttt
+\let\proglang=\textsf
+\newcommand{\pkg}[1]{{\fontseries{b}\selectfont #1}}
+\newcommand{\email}[1]{\href{mailto:#1}{\normalfont\texttt{#1}}}
+\ifx\csname urlstyle\endcsname\relax
+  \newcommand\@doi[1]{doi:\discretionary{}{}{}#1}\else
+  \newcommand\@doi{doi:\discretionary{}{}{}\begingroup
+\urlstyle{tt}\Url}\fi
+\newcommand{\doi}[1]{\href{http://dx.doi.org/#1}{\normalfont\texttt{\@doi{#1}}}}
+\makeatletter
+
+
+\title{Generalized Wendland Function}
+\author{Thomas Caspar Fischer}
+
+\begin{document}
+
+\maketitle
+
+<<section01, child="section01.Rnw">>=
+@
+
+<<section02, child="section02.Rnw">>=
+@
+
+<<section03, child="section03.Rnw">>=
+@
+
+<<section04, child="section04.Rnw">>=
+@
+
+<<section05, child="section05.Rnw">>=
+@
+
+<<section06, child="section06.Rnw">>=
+@
+
+\bibliographystyle{mywiley}
+\bibliography{references}
+
+\end{document}

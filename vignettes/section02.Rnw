@@ -1,0 +1,12 @@
+
+<<section02_setup, echo=FALSE, include=FALSE>>=
+knitr::opts_chunk$set(cache = FALSE, tidy = TRUE, fig.path = "figures/",
+                      cache.path = "cache/s02/", warning = FALSE,
+                      error = FALSE, message = FALSE, echo = FALSE)
+@
+
+\section{Installation}
+
+Users must install the GSL C library \citep{prg-gsl} manually on their system. On unix-based systems the library can be directly installed from a source package or via \code{sudo apt install gsl-bin}. Windows users, on the other hand, will first need to install the Rtools toolchain \citep{rtools}, locate and launch the \code{msys2} executable, run \code{pacman -Syu} to update the toolchain, and finally run \code{pacman -S mingw-w64-gsl} to install GSL.
+
+Note that the GSL library is also a dependency of the \pkg{RcppGSL} package \citep{pkg-RcppGSL}, which will tell the user during installation whether the library has been installed correctly.

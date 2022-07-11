@@ -1,0 +1,61 @@
+## General and platform dependent
+
+SHELL := /bin/bash
+
+UNAME = $(shell uname -n)
+
+ifeq ($(UNAME), thomas-arch-l)
+
+  R := /usr/bin/R
+  RSCRIPT := /usr/bin/Rscript
+  GCC := gcc
+
+  R_VERSION = $(RSCRIPT) -e "version"
+
+  #CFLAGS :=
+  #CXXFLAGS :=
+  FFLAGS := -g -fpic -O2 -mtune=native -Wall -fno-common -flto -pedantic -c
+
+  LFFLAGS := -shared -llapack -lf77blas -latlas -lgfortran -lm -lquadmath -lgfortran -lm -lquadmath -lR
+  LFFLAGS64 := -shared -llapack -lf77blas -latlas -lgfortran -lm -lquadmath -lgfortran -lm -lquadmath -lR
+
+else ifeq ($(UNAME),Jonen)
+
+   R := /usr/lib/R-devel/bin/R
+   RSCRIPT := /usr/lib/R-devel/bin/Rscript
+
+   GCC := gcc
+   FFLAGS :=  -fpic -g -O2 -mtune=native -Wall  -fno-common -flto -pedantic -c
+
+  INIT_O := -I"/usr/lib/R-devel/lib/R/include" -DNDEBUG -I/usr/local/include -fpic -g -O2 -c init.c -o init.o
+
+  LFFLAGS := -shared  -L/usr/lib/mesa -o spam.so bckslvmodified.o cholmodified.o dgetv0.o dist.o dn_ARPACK.o dn_eigen.o ds_ARPACK.o ds_eigen.o fromsparsekit.o init.o kronecker.o permutation.o rowcolstats.o spamown.o spamown2.o xybind.o -llapack -lf77blas -latlas -lgfortran -lm -lquadmath -lgfortran -lm -lquadmath  -lR
+
+  LFFLAGS64 := -shared  -L/usr/lib/mesa -o spam.so bckslvmodified.o cholmodified.o dgetv0.o dist.o dn_ARPACK.o dn_eigen64.o ds_ARPACK.o ds_eigen64.o fromsparsekit.o init.o kronecker.o permutation.o rowcolstats.o spamown.o spamown2.o xybind.o -llapack -lf77blas -latlas -lgfortran -lm -lquadmath -lgfortran -lm -lquadmath  -lR
+
+
+else
+  LIBPATH = export R_LIBS_USER=$(shell pwd)/lib &&
+  R := $(LIBPATH) R-4.0.2
+  RSCRIPT := $(LIBPATH) Rscript-4.0.2
+
+  #LIBPATH = export R_LIBS_USER=$(shell pwd)/lib:/usr/sepp1.5.1/drwho/pack-a/r-devel-99-ro/amd64-linux-ubuntu14.04/lib/R/library:/home/furrer/R/x86_64-pc-linux-gnu-library/3.5:/usr/lib/R-devel/lib/R/library &&
+  #R := $(LIBPATH) R-99                         ## On I-MATH servers: daily built devel version
+  #RSCRIPT := $(LIBPATH) Rscript-99              ## On I-MATH servers: daily built devel version
+
+
+  GCC := gcc-10.2019.1006
+
+  FFLAGS := -fno-optimize-sibling-calls -fpic -g -O2 -mtune=native -Wall -fallow-argument-mismatch -Wextra -pedantic -flto -c
+
+  INIT_O := -I"/usr/pack/r-3.5.0-jenkins/amd64-linux-ubuntu16.04/lib/R/include" -DNDEBUG -I/usr/local/include -fpic -g -O2 -c init.c -o init.o
+
+  LFFLAGS := -shared -L/usr/pack/r-3.5.0-jenkins/amd64-linux-ubuntu16.04/lib/R/lib -Wl,-rpath -Wl,/usr/pack/r-3.5.0-jenkins/amd64-linux-ubuntu16.04/lib/R/lib:/usr/lib/jvm/java-8-oracle/jre/lib/amd64/server:/usr/lib/jvm/java-8-openjdk-amd64/jre/lib/amd64/server -L/usr/lib/mesa -o spam.so bckslvmodified.o cholmodified.o dgetv0.o dist.o dn_ARPACK.o dn_eigen.o ds_ARPACK.o ds_eigen.o fromsparsekit.o init.o kronecker.o permutation.o rowcolstats.o spamown.o spamown2.o xybind.o -llapack -lf77blas -latlas -lgfortran -lm -lquadmath -lgfortran -lm -lquadmath -L/usr/pack/r-3.5.0-jenkins/amd64-linux-ubuntu16.04/lib/R/lib -lR
+
+  LFFLAGS64 := -shared -L/usr/pack/r-3.5.0-jenkins/amd64-linux-ubuntu16.04/lib/R/lib -Wl,-rpath -Wl,/usr/pack/r-3.5.0-jenkins/amd64-linux-ubuntu16.04/lib/R/lib:/usr/lib/jvm/java-8-oracle/jre/lib/amd64/server:/usr/lib/jvm/java-8-openjdk-amd64/jre/lib/amd64/server -L/usr/lib/mesa -o spam.so bckslvmodified.o cholmodified.o dgetv0.o dist.o dn_ARPACK.o dn_eigen64.o ds_ARPACK.o ds_eigen64.o fromsparsekit.o init.o kronecker.o permutation.o rowcolstats.o spamown.o spamown2.o xybind.o -llapack -lf77blas -latlas -lgfortran -lm -lquadmath -lgfortran -lm -lquadmath -L/usr/pack/r-3.5.0-jenkins/amd64-linux-ubuntu16.04/lib/R/lib -lR
+
+endif
+
+
+.SUFFIXES: .Rnw .R .Rout .tex .pdf .c .o .so .f
+

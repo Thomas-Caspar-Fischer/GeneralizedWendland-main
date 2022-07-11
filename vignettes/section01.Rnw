@@ -1,0 +1,135 @@
+
+<<section01_setup, echo=FALSE, include=FALSE>>=
+knitr::opts_chunk$set(cache = TRUE, tidy = FALSE, fig.path = "figures/",
+                      cache.path = "cache/s01/", warning = FALSE,
+                      error = FALSE, message = FALSE, echo = FALSE)
+
+source("R/packages.R")
+CLEANUP <- TRUE
+
+default_opts <- options()
+wendland_opts <- list(
+  wendland.numint.abstol = .Machine$double.eps^0.5,
+  wendland.numint.reltol = .Machine$double.eps^0.25,
+  wendland.numint.subintervals = 50,
+  wendland.numint.qag_key = 6,
+  wendland.cov.eps = .Machine$double.eps^0.5)
+options(wendland_opts)
+
+grid_resolution <- 1000
+
+# Covariance Parameters
+target_theta <- list(range = 1, sill = 1, kappa = c(0, 2.5, 5),
+  mu = c(0, 2.5, 5), nugget = 0)
+
+target_args <- list()
+
+compare_wend_wend <- covDiagFactory(target_covariance = cov.wendland,
+  diagnostic_funs = c("point_diagnostics"), reference_covariance = cov.wendland)
+@
+
+
+
+% Computations
+
+<<section01_compute>>=
+plot_data <- compare_wend_wend(target_theta_list = target_theta,
+  target_args_list = target_args, grid_resolution = grid_resolution,
+  absolute = TRUE)
+@
+
+\section{Introduction}
+
+Kriging models are an important tool for geostatistical modeling. However, technological advances have greatly increased data volumes, to the point where the model lacks the scalability to work with these large data sets. This is in part because the Mat\'ern covariance, which is commonly used in geostatistics because of its continuous parameterization of the smoothness, does not have compact support and will thus generally produce dense covariance matrices. For large datasets, computing the cholesky decomposition of the resulting covariance matrix becomes an intractable task, as the computational complexity of the operation is of order $\mathsf{O}(n^3)$. Attempts to address this issue have focused on sparse methods, proposing different ways to compose covariance functions with compact support and continuous smoothness parameters, for example by applying a taper to the Mat\'ern covariance function, because there exist few covariance functions with both compact support and continuously parameterized smoothness of the underlying Gaussian Random Field.
+
+
+One exception is the generalized Wendland correlation function, which is a function of distance with three parameters: a range ($\beta$) and two shape parameters ($\kappa$ and $\mu$). The function is positive definite if $\beta>0,~\kappa>0,~\mu\geq{{1+d}/{2}+\kappa}$ \citep{Bevilacqua2019}. The shape parameter of the Mat\'ern covariance and parameter $\kappa$ of the generalized Wendland function follow the relationship $\nu = \kappa + 0.5$ \citep{Bevilacqua2019}. Yet unlike the Mat\'ern covariance, the generalized Wendland function has compact support and has an additional parameter for smoothness.
+Note that the generalized Wendland covariance function approximates the Mat\'ern covariance in the limit \cite{Bevilacqua2022}.
+
+
+The primary disadvantage that has so far prevented a wider adoption of the generalized Wendland covariance in geostatistics is its computational intensity, as it generally requires the use of numerical integration techniques to evaluate because the function does not generally have a closed form representation. We consider the following correlation with range one:
+\begin{equation*}
+  \rho_{1,\kappa,\mu}(h) = \left\{
+    \begin{array}{lr}
+      \frac{1}{\mathsf{B}(1+2\kappa, \mu)} \int_{h}^{1} (u^2-h^2)^\kappa~(1-u)^{\mu-1}du & 0 < h < 1\\
+      0             & h \geq 1
+    \end{array}
+  \right.
+\end{equation*}
+\begin{equation*}
+  \rho_{1,\kappa,\mu}(h) = \left\{
+    \begin{array}{lr}
+        \frac{1}{\mathsf{B}(2\kappa, \mu+1)} \int_{h}^{1} u(u^2-h^2)^{\kappa-1}~(1-u)^{\mu}du & 0 < h < 1\\
+      0 & h \geq 1
+    \end{array}
+  \right.
+\end{equation*}%
+%
+There exist some special cases such as the Askey function, which arises for $\kappa = 0$, and others at $\kappa=1,2,\ldots$.%
+%
+\begin{equation*}
+\begin{array}{ll}
+  \kappa & \rho_{1,\kappa,\mu}(h)\\
+  0 & (1-h)_{+}^{\mu}\\
+  1 & (1-h)_{+}^{\mu+1}(1 + h(\mu+1))\\
+  2 & (1-h)_{+}^{\mu+2}(1 + \frac{h}{3}(\mu+2) + h^2(\mu^2+4\mu+3))
+\end{array}
+\end{equation*}%
+%
+with%
+%
+\begin{equation*}
+  \rho_{1,\kappa,\mu}(h) = (1-h)_{+}^{\mu} = \left\{
+    \begin{array}{lr}
+      (1-h)^{\mu} & 0 < h < 1\\
+      0 & h \geq 1\\
+    \end{array}
+  \right.
+\end{equation*}%
+%
+The covariance function corresponding to these correlation functions is then given by the expression%
+%
+\begin{equation*}
+  \phi_{\beta,\sigma,\kappa,\mu,\theta}(h) = \left\{
+    \begin{array}{lr}
+      \sigma + \theta & h/\beta < \epsilon\\
+      \sigma \rho_{\beta,\kappa,\mu}(h/\beta) & 0 < h/\beta < 1\\
+      0               & h/\beta \geq 1
+    \end{array}
+  \right.
+\end{equation*}
+
+% Refer in the text to the figure.
+
+\begin{figure}[ht]
+\centering
+<<wend_corr_plot>>=
+plot_data$point_diagnostics %>%
+  mutate(mu_actual = 1.5 + target.kappa + target.mu,
+         mu_label = factor(paste("mu=", mu_actual),
+                           levels = paste("mu=", unique(mu_actual))),
+         kappa_label = factor(paste("kappa=", target.kappa),
+                              levels = paste("kappa=", unique(target.kappa)))) %>%
+  ggplot() +
+  geom_line(aes(x = h, y = target_cov,
+                group = mu_label,
+                col = as.factor(mu_actual))) +
+  xlab("Distance") + ylab("Covariance") +
+  guides(colour = guide_legend(title = expression("mu"),
+                               title.position = "top",
+                               title.hjust = 0.5)) +
+  facet_wrap(~kappa_label, nrow = 3) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+@
+\caption{Wendland correlation function for different values of $\kappa$ and $\mu$. \label{fig:wend-corr-fun}}
+\end{figure}
+
+This package intended to solve both of these issues. The covariance function implemented in this package reduces computation time by using a C++ backend, and further offers powerful approximation methods.
+
+%===============================================================================
+<<section01-cleanup, echo=FALSE, include=FALSE, eval=CLEANUP>>=
+options(default_opts)
+rm(list = ls())
+gc()
+@

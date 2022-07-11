@@ -1,0 +1,186 @@
+
+<<section03_setup, echo=FALSE, include=FALSE>>=
+knitr::opts_chunk$set(cache = TRUE, tidy = FALSE, fig.path = "figures/",
+                      cache.path = "cache/s03/", warning = FALSE,
+                      error = FALSE, message = FALSE, echo = FALSE)
+
+source("R/packages.R")
+CLEANUP <- TRUE
+random_seed <- 54
+digits <- 2
+
+default_opts <- options()
+wendland_opts <- list(
+  wendland.numint.abstol = .Machine$double.eps^0.5,
+  wendland.numint.reltol = .Machine$double.eps^0.25,
+  wendland.numint.subintervals = 50,
+  wendland.numint.qag_key = 6,
+  wendland.cov.eps = .Machine$double.eps^0.5)
+options(wendland_opts)
+
+
+target_theta <- list(range = 1, sill = 1, kappa = 1.25, mu = 0.75,
+  nugget = 0)
+
+target_args <- list(interp.method = c("linear", "cspline", "polynomial"),
+  interp.num_support = c(10, 20, 30, 40, 50, 60, 70, 80))
+@
+
+
+
+%===============================================================================
+% Computations
+%===============================================================================
+<<section03_compute_abserr>>=
+wendland_ptw_comparison <- covDiagFactory(target_covariance = cov.wendland,
+  diagnostic_funs = c("point_diagnostics"),
+  reference_covariance = cov.wendland)
+
+plot_data <- wendland_ptw_comparison(target_theta_list = target_theta,
+  target_args_list = target_args, grid_resolution = 1000,
+  absolute = TRUE)
+@
+
+<<timing_table>>=
+n <- 100
+times <- 1000
+time_unit <- "ms"
+num_support <- 50
+theta <- c(1, 1, 0.25, 0.5, 0)
+
+set.seed(random_seed)
+locations <- data.frame(x=runif(n), y = runif(n))
+dmat <- as.matrix(dist(locations))
+
+covFun.lin <- covarianceFactory(cov.wendland, cov.args = list(
+  interp.method = "linear", interp.num_support = num_support))
+covFun.csp <- covarianceFactory(cov.wendland, cov.args = list(
+  interp.method = "cspline", interp.num_support = num_support))
+covFun.pol <- covarianceFactory(cov.wendland, cov.args = list(
+  interp.method = "polynomial", interp.num_support = num_support))
+
+timings <- microbenchmark(
+  Exact   = cov.wendland(dmat, theta = theta),
+  Askey   = cov.askey(dmat, theta = theta[-3]),
+  Linear  = covFun.lin(dmat, theta = theta),
+  Cspline = covFun.csp(dmat, theta = theta),
+  Polynom = covFun.pol(dmat, theta = theta),
+  times   = times, unit = time_unit,
+  control = list(order = "random"))
+
+timings_summary <- summary(timings)[,2:7]
+
+colnames(timings_summary) <- c("Minimum", "Q1", "Mean", "Median", "Q3",
+  "Maximum")
+row.names(timings_summary) <- c("Exact", "Askey", "Linear Interpolation",
+  "Cubic Spline Interpolation", "Polynomial Interpolation")
+@
+
+
+%===============================================================================
+\section{Features and how to use them}
+%===============================================================================
+
+Albeit its properties make it useful for geostatistical modeling, the lack of a closed form of the generalized Wendland function necessitates the use of computationally expensive numerical integration. The impact is even substantial enough as to overpower the expected benefits of sparsity. The implementation in this package therefore provides users with multiple methods for approximating the actual function with less computationally expensive numerical interpolation. The most important features of the package can be summarized as follows:
+
+\begin{enumerate}
+    \item Fully parameterized implementation of the generalized Wendland covariance function.
+    \item Option to estimate models with fixed range and/or nugget parameters.
+    \item Approximation methods based on numerical interpolation.
+    \item Full compatibility with \pkg{spam} \citep{pkg-spam}.
+    \item Easy interface to \pkg{optimParallel} \citep{pkg-optimParallel}.
+\end{enumerate}
+
+\subsection{Fully parameterized implementation}
+
+As was discussed in the previous section, the implementation offered here allows users to freely specify parameters $\beta,~\kappa,~\mu$. Recalling that the covariance is only positive definite for a subset of the parameter space, users can further configure whether to make use of the parameterization $\mu=(1+d)/2 + \kappa + \nu$ via a global setting or as an optional argument in \code{cov.args}. This in essence facilitates the use of the covariance function in maximum likelihood estimation.
+
+\subsection{Fixing parameters during maximum likelihood estimation}
+All of the covariance functions contained in the \pkg{spam} package include both a range and nugget parameter, which are typically estimated jointly with the shape parameters and partial sill. These additional parameters greatly increase computation time during estimation, and may not be relevant to every user. For these cases, this package offers a wrapper for covariance functions which permits users to fix the range and nugget parameter to a constant value.
+
+
+
+%===============================================================================
+\subsection{Working with approximations}
+%===============================================================================
+
+Given that the purpose of using the generalized Wendland covariance is to alleviate the scalability issue, the cost incurred by numerical integration should not be ignored, as it can become quite substantial for larger data sets. Consider for example a data set with \Sexpr{n} measurements. Assuming that the distance matrix is dense, at worst this would require \Sexpr{ceiling(0.5*(n*(n-1)))} evaluations of the correlation function. Approximations can help address this, and as a consequence of correlation functions being positive-definite, they are straightforward to approximate using interpolation. This package provides linear interpolation, cubic spline interpolation, and polynomial interpolation. Table~\ref{tab:cov-timings} presents timing statistics for one complete evaluation with $n=\Sexpr{n},~\kappa=\Sexpr{target_theta[["kappa"]]}~\mu=\Sexpr{target_theta[["mu"]]}$
+
+\begin{table}
+\centering
+\caption{Simple timing (in \Sexpr{time_unit}) of different computation methods. \label{tab:cov-timings}}
+<<timing_table_output, results='asis'>>=
+knitr::kable(timings_summary, format = "latex", row.names = TRUE, digits = digits)
+@
+\end{table}
+
+Table~\ref{tab:cov-timings} provides an overview of computation time across different methods for evaluating the Askey covariance. The comparison between the actual Askey function and the corresponding exact generalized Wendland function illustrates how expensive the latter is  to evaluate. For a one-time evaluation this might still be negligible, but not necessarily in maximum likelihood estimation, which generally requires the covariance matrix to be computed in each iteration. Using interpolation, on the other hand, greatly decreases the computational cost of such an evaluation. As Figures~\ref{fig:abs-err-wend-wend} and~\ref{fig:rel-err-wend-wend} indicate, this is actually a trade-off against the accuracy of the covariance matrix, and results may vary to different extents depending on the choice of interpolator and number of support points. Of particular note in Figure~\ref{fig:abs-err-wend-wend} is the erratic nature of the polynomial interpolator for large number of support points. In some applications, it can clearly outperform the other interpolators, yielding absolute errors well below the single precision threshold, yet the interpolated values may also explode. Cubic splines are perhaps the most forgiving method, as the results are barely below the single precision threshold for moderately many support points ($n=80$).
+
+\begin{figure}
+\centering
+<<interp_wend_wend_abserr_plot_out>>=
+plot_data$point_diagnostics %>%
+  ggplot() +
+  geom_line(aes(x = h, y = absolute_error, group = target.interp.num_support,
+    col = as.factor(target.interp.num_support))) +
+  facet_wrap(~target.interp.method, nrow = 3) +
+  xlab("Distance") + ylab("Absolute Error") +
+  guides(colour = guide_legend("Support points", title.position = "top",
+    title.hjust = 0.5)) +
+  scale_y_continuous(trans = "log10") +
+  geom_hline(yintercept = .Machine$double.eps^0.5, lty = 2) +
+  geom_hline(yintercept = .Machine$double.eps, lty = 3) +
+  theme_minimal()
+@
+\caption{Absolute error of interpolated Wendland correlation function relative to exact method, using $\kappa=\Sexpr{target_theta[["kappa"]]},~\mu=\Sexpr{target_theta[["mu"]]+1.5+target_theta[["kappa"]]}$. \label{fig:abs-err-wend-wend}}
+\end{figure}
+
+
+
+\begin{figure}
+\centering
+<<interp_wend_wend_relerr_plot_out>>=
+plot_data$point_diagnostics %>%
+  ggplot() +
+  geom_line(aes(x = h,
+                y = relative_error,
+                group = target.interp.num_support,
+                col = as.factor(target.interp.num_support))) +
+  scale_y_continuous(limits = c(-1, 1)) +
+  facet_wrap(~target.interp.method, nrow = 3) +
+  xlab("Distance") + ylab("Relative Error") +
+  guides(colour = guide_legend("Support points",
+                               title.position = "top",
+                               title.hjust = 0.5)) +
+  theme_minimal()
+@
+\caption{Relative error of interpolated Wendland correlation function compared to exact method, using $\kappa=\Sexpr{target_theta[["kappa"]]},~\mu=\Sexpr{target_theta[["mu"]]}$. \label{fig:rel-err-wend-wend}}
+\end{figure}
+
+As curves are visually indistinguishable, but the timing information indicates just how much time was actually saved. A more in-depth analysis of interpolation error is shown in Section~\ref{sec:techdetails}.
+
+
+
+%===============================================================================
+\subsection{Compatibility with spam\label{sec:interoperability}}
+%===============================================================================
+
+The \pkg{GeneralizedWendland} package was designed for use with the \pkg{spam} package, and thus follows its naming convention barring one exception: due to the vast number of optional configuration parameters, these are passed to the function in a list. To ensure that this follows a certain logic, the \code{eps} argument has also been moved to this list. The function \code{cov.wendland()} is itself fully compatible with all \pkg{spam} functions, as are the wrapper functions generated using \code{covarianceFactory()}. Furthermore, the package also provides its own suite of tools for parameter estimation, albeit these still require spam as a dependency.
+
+Despite the focus on the spam package, the functions could also be adapted for use in other packages for geostatistical modeling like the \pkg{fields} package. Compatibility to these packages and perhaps to different formats of sparse matrices may be extended in future versions of the \pkg{GeneralizedWendland} package.
+
+The package also provides an alternative framework for maximum likelihood estimation which, while based on the \pkg{spam} implementation, makes heavy use of function factories to assist the user in setting up their analysis. Finally, the package provides a diagnostic suite which allows users to obtain a selection of error metrics for the generalized Wendland covariance.
+
+
+%===============================================================================
+\subsection{Compatibility with optimParallel}
+%===============================================================================
+
+When performing maximum likelihood estimation using gradient-based methods such as L-BFGS-B, the gradient needs to be estimated numerically unless the user specifies a gradient function. These operations can be performed in parallel using optimParallel. The mle framework provided in this package is directly compatible with optimParallel, allowing users to specify the relevant arguments in their initial call to the mle function.
+
+%===============================================================================
+<<section03-cleanup, include=FALSE, eval=CLEANUP>>=
+options(default_opts)
+rm(list = ls())
+gc()
+@

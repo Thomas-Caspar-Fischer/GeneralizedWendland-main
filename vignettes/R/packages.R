@@ -1,0 +1,8 @@
+library(knitr)
+library(dplyr)
+library(ggplot2)
+library(gridExtra)
+library(microbenchmark)
+library(spam)
+library(spam64)
+library(GeneralizedWendland)

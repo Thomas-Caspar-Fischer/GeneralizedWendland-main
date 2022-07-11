@@ -1,0 +1,377 @@
+
+<<section05_setup, echo=FALSE, include=FALSE>>=
+knitr::opts_chunk$set(cache = TRUE, tidy = FALSE, fig.path = "figures/",
+                      cache.path = "cache/s05/", warning = FALSE,
+                      error = FALSE, message = FALSE, echo = FALSE)
+
+source("R/packages.R")
+
+CLEANUP <- TRUE
+
+# Colors
+cols_mu <- c(rev(RColorBrewer::brewer.pal(5,"Reds")),
+             "#FFFFFF",
+             RColorBrewer::brewer.pal(5, "Blues"))
+cols_sd <- RColorBrewer::brewer.pal(9, "Greys")
+
+# Ggplot theme
+heatmap_theme <- theme(axis.line = element_blank(), axis.text.x = element_blank(),
+  axis.text.y = element_blank(), axis.ticks = element_blank(),
+  axis.title.x=element_blank(), axis.title.y = element_blank(),
+  panel.background = element_blank(), legend.position = "bottom",
+  plot.margin = margin(t=0,r=0,l=0,b=0))
+
+default_opts <- options()
+wendland_opts <- list(
+  wendland.numint.abstol = .Machine$double.eps^0.5,
+  wendland.numint.reltol = .Machine$double.eps^0.25,
+  wendland.numint.subintervals = 50,
+  wendland.numint.qag_key = 6,
+  wendland.cov.eps = .Machine$double.eps^0.5)
+options(wendland_opts)
+options(spam.nearestdistnnz=c(2.4e6,1e5))
+
+cov.args.default <- list()
+chol.args <- list(pivot = "RCM", eps = .Machine$double.eps*100)
+optim.args <- list()
+optimParallel.args <- list(num_cores = 2, loginfo = TRUE)
+
+random_seed <- 83
+curve_resolution <- 1e-3
+n_sim <- 100
+digits <- 2
+predict_using_spam <- TRUE
+@
+
+
+
+%===============================================================================
+% Definitions of chunks to be used as child chunks
+%===============================================================================
+
+<<covariance_curve, eval=FALSE>>=
+# To be called as child chunk
+d <- seq(0, 1, curve_resolution)
+true_cov <- cov.wendland(d, theta = true_theta, cov.args = cov.args.default)
+model_cov <- covarianceFunction(d, optim_theta)
+plot(d, true_cov, xlab = "Distance", ylab = "Covariance", type = "l")
+lines(d, model_cov, col = "red")
+legend("top", legend = c("True", "Estimated"), col = c("black", "red"),
+       lty = c(1,1), title = "", horiz = TRUE)
+@
+
+<<method_compute_simulation, eval=FALSE>>=
+# To be called as child chunk
+makePredictions <- predictionFactory(y = y, locs0 = locs0, locs1 = locs1,
+  covariance = cov.wendland, X0 = X0, X1 = X1,
+  cov.args = cov.args, chol.args = chol.args, use_spam = predict_using_spam)
+
+predictions <- makePredictions(n_sim, optim_par) %>%
+  apply(2, function(x) data.frame(mean = mean(x), sd = sd(x)), simplify = TRUE) %>%
+  (function(x) cbind(locs1, do.call("rbind", x)))
+@
+
+
+<<method_plot_simulation, eval=FALSE, fig.height=4>>=
+p1 <- ggplot() +
+  geom_tile(aes(x = x, y = y, fill = mean), data = predictions) +
+  geom_point(aes(x = x, y = y), data = locs0, col = "black", size = 0.5) +
+  scale_fill_gradientn(colors = cols_mu) +
+  guides(fill = guide_colorbar(title="Predictive mean",
+    title.position = "top", title.hjust = 0.5, nbin = 100, barwidth = 10)) +
+  heatmap_theme
+
+
+p2 <- ggplot() +
+  geom_tile(aes(x = x, y = y, fill = sd), data = predictions) +
+  geom_point(aes(x = x, y = y), data = locs0, col = "red", size = 0.5) +
+  scale_fill_gradientn(colors = cols_sd) +
+  guides(fill = guide_colorbar(title="Predictive SD",
+    title.position = "top", title.hjust = 0.5, nbin = 100, barwidth = 10)) +
+  heatmap_theme
+
+grid.arrange(p1, p2, nrow = 1)
+@
+
+
+
+%===============================================================================
+\section{Estimating Kriging models using GeneralizedWendland}
+%===============================================================================
+
+
+<<example_setup, echo=TRUE>>=
+# Simulated spatial data
+n <- 1000
+grid_resolution <- 2.5e-3#3.33e-3
+pred_resolution <- 5e-2
+
+locs <- expand.grid(x = seq(-1, 1, grid_resolution),
+                    y = seq(-1, 1, grid_resolution))
+max_dist <- sqrt((max(locs$x)-min(locs$x))^2 + (max(locs$y)-min(locs$y))^2)
+set.seed(random_seed)
+
+obs_ind <- sample(1:nrow(locs), n)
+locs0 <- locs[obs_ind,]
+locs1 <- expand.grid(x = seq(-1 + pred_resolution/2,
+                             1 - pred_resolution/2,
+                             pred_resolution),
+                     y = seq(-1 + pred_resolution/2,
+                             1 - pred_resolution/2,
+                             pred_resolution))
+
+# Specify true model
+drift_formula <- ~1 + x + y
+true_beta <- c(0.5, -0.1, 0.1)
+true_theta <- c(0.7, 3.0, 0.5, 1.5, 1)
+
+# Initial values and box constraints
+init_theta <- c(0.7, 1.0, 0.5, 1.5, 0.1)
+lower_theta <- rep(0, 5)
+upper_theta <- c(max_dist, rep(1e1, 4))
+
+# Design matrices
+X0 <- model.matrix(drift_formula, locs0)
+X1 <- model.matrix(drift_formula, locs1)
+
+# Distance matrix
+dmat <- spam::nearest.dist(locs0, locs0, delta = true_theta[1])
+
+# True covariance matrix
+true_Sigma <- cov.wendland(dmat, theta = true_theta)
+
+# Simulate from multivariate normal
+y <- c(spam::rmvnorm.spam(1, mu = X0 %*% true_beta, Sigma = true_Sigma))
+@
+
+
+\begin{figure}
+\centering
+<<predictive_dist, fig.height=4>>=
+cov.args <- cov.args.default
+optim_par <- c(true_beta, true_theta)
+<<method_compute_simulation>>
+<<method_plot_simulation>>
+@
+\caption{Empiric predictive mean and standard deviation at new locations for true parameters. \label{fig:actual-predictive}}
+\end{figure}
+
+To illustrate how to use \pkg{GeneralizedWendland} for geostatistical modeling, this section presents a small, artificial example. For simplicity, we assume that measurement locations occupy an equidistant 2D grid with $n = $\Sexpr{n} points. Furthermore, the data model includes a global mean and linear spatial drift. As the spatial Gaussian process model is frequently applied to interpolating between measurement locations, Figures~\ref{fig:actual-predictive},~\ref{fig:method1-predictive},~\ref{fig:method2-predictive},~\ref{fig:method3-predictive}, and~\ref{fig:method4-predictive} illustrate this by drawing realizations from a multivariate Gaussian distribution and computing the mean and standard deviation per location.
+
+%===============================================================================
+\subsection{Exact method}
+%===============================================================================
+
+
+<<method1_exact, echo=TRUE>>=
+cov.args1 <- cov.args <- list()
+mleFun <- mleFactory(covariance = cov.wendland, cov.args = cov.args,
+  chol.args = chol.args, optim.args = optim.args, hessian = FALSE,
+  optimParallel.args = optimParallel.args)
+
+time1 <- system.time({
+  result1 <- mleFun(y = y, X = X0, distmat = dmat,
+    init_parameters = init_theta, theta_llim = lower_theta,
+    theta_ulim = upper_theta)
+})
+
+print(result1[c("par", "value", "counts")], digits = digits)
+@
+
+
+\begin{figure}
+\centering
+<<method1_exact_predictions, fig.height=4>>=
+optim_par <- result1$par
+<<method_compute_simulation>>
+<<method_plot_simulation>>
+@
+\caption{Empiric predictive mean and standard deviation at new locations for parameters estimated using method 1. \label{fig:method1-predictive}}
+\end{figure}
+
+In the basic use case, maximum likelihood estimation utilizes a covariance matrix obtained from the exact formulation of the generalized Wendland function, and all model parameters are estimated jointly. The implementation is mostly equivalent to that provided in the \pkg{spam} package.
+
+
+%===============================================================================
+\subsection{Using covariance interpolation}
+%===============================================================================
+
+<<method2_interpolation, echo=TRUE>>=
+cov.args2 <- cov.args <- list(interp.num_support = 100, interp.method = "cspline")
+
+mleFun <- mleFactory(covariance = cov.wendland, cov.args = cov.args,
+  chol.args = chol.args, optim.args = optim.args, hessian = FALSE,
+  optimParallel.args = optimParallel.args)
+
+time2 <- system.time({
+  result2 <- mleFun(y = y, X = X0, distmat = dmat,
+    init_parameters = init_theta, theta_llim = lower_theta,
+    theta_ulim = upper_theta)
+})
+
+print(result2[c("par", "value", "counts")], digits = digits)
+@
+
+
+
+\begin{figure}
+\centering
+<<method2_predictions, fig.height=4>>=
+optim_par <- result2$par
+<<method_compute_simulation>>
+<<method_plot_simulation>>
+@
+\caption{Empiric predictive mean and standard deviation at new locations for parameters estimated using method 2. \label{fig:method2-predictive}}
+\end{figure}
+
+Covariance interpolation is provided by a C++ wrapper for the GSL library. The R function itself only passes the corresponding parameters to this C++ function, and consequently these methods cannot be accessed directly by the user. To make use of covariance interpolation, users have to provide \code{interp.method} and \code{interp.num\_support} in \code{cov.args}.
+
+
+%===============================================================================
+\subsection{Using direct misspecification}
+%===============================================================================
+
+<<method3_directmisspecification, echo=TRUE>>=
+cov.args3 <- cov.args <- list(fixed_range_value = true_theta[1])
+
+mleFun <- mleFactory(covariance = cov.wendland, cov.args = cov.args,
+  chol.args = chol.args, optim.args = optim.args, hessian = FALSE,
+  optimParallel.args = optimParallel.args)
+
+time3 <- system.time({
+  result3 <- mleFun(y = y, X = X0, distmat = dmat,
+    init_parameters = init_theta[-1], theta_llim = lower_theta[-1],
+    theta_ulim = upper_theta[-1])
+})
+
+print(result3[c("par", "value", "counts")], digits = digits)
+@
+
+
+
+\begin{figure}
+\centering
+<<method3_predictions, fig.height=4>>=
+optim_par <- result3$par
+<<method_compute_simulation>>
+<<method_plot_simulation>>
+@
+\caption{Empiric predictive mean and standard deviation at new locations for parameters estimated using method 3. \label{fig:method3-predictive}}
+\end{figure}
+
+Direct misspecification is implemented through the \code{covarianceFactory} function. This is a function factory which essentially serves as a wrapper to any arbitrary covariance function with comparable arguments to \code{cov.wendland()}. Users can fix the range to a specific value by assigning it to the \code{fixed\_range\_value} argument of \code{cov.args}.
+
+
+%===============================================================================
+\subsection{Combining interpolation and direct misspecification}
+%===============================================================================
+
+<<method4_interp_misspec, results='markup', echo=TRUE>>=
+cov.args4 <- cov.args <- list(interp.num_support = 100,
+  interp.method = "cspline", fixed_range_value = true_theta[1])
+
+mleFun <- mleFactory(covariance = cov.wendland, cov.args = cov.args,
+  chol.args = chol.args, optim.args = optim.args, hessian = FALSE,
+  optimParallel.args = optimParallel.args)
+
+time4 <- system.time({
+  result4 <- mleFun(y = y, X = X0, distmat = dmat,
+    init_parameters = init_theta[-1], theta_llim = lower_theta[-1],
+    theta_ulim = upper_theta[-1])
+})
+
+print(result4[c("par", "value", "counts")], digits = digits)
+@
+
+
+
+\begin{figure}
+\centering
+<<method4_predictions, fig.height=4>>=
+optim_par <- result4$par
+<<method_compute_simulation>>
+<<method_plot_simulation>>
+@
+\caption{Empiric predictive mean and standard deviation at new locations for parameters estimated using method 4. \label{fig:method4-predictive}}
+\end{figure}
+
+Direct misspecification and covariance interpolation can also be used conjointly to further reduce computation time.
+
+
+%===============================================================================
+\subsection{Comparison of results}
+%===============================================================================
+
+Figure~\ref{fig:methods-visual} indicates that all methods discussed here yield very similar estimates for the covariance function, the main differences pertaining to the reparameterized $\mu$. The actual estimates are presented in Table~\ref{tab:mle-results}. Of particular interest are the timings for the maximum likelihood estimation itself. For the exact approach and direct misspecification with a reasonable range, computation time is eclipse 3 minutes, whereas using interpolation reduces this down to just over a minute, and even just 40 seconds when using both interpolation and misspecification.
+
+\begin{figure}
+\centering
+\begin{subfigure}{0.45\textwidth}
+\centering
+<<method1_exact_covariance>>=
+optim_theta <- result1$par[-seq_len(ncol(X0))]
+covarianceFunction <- covarianceFactory(cov.wendland, cov.args1)
+<<covariance_curve>>
+@
+\caption{Exact method. \label{fig:method1-cov}}
+\end{subfigure}
+\begin{subfigure}{0.45\textwidth}
+\centering
+<<method2_covariance>>=
+optim_theta <- result2$par[-seq_len(ncol(X0))]
+covarianceFunction <- covarianceFactory(cov.wendland, cov.args2)
+<<covariance_curve>>
+@
+\caption{Cubic splines (\Sexpr{cov.args[["interp.num_support"]]} support points). \label{fig:method2-cov}}
+\end{subfigure}
+
+\begin{subfigure}{0.45\textwidth}
+\centering
+<<method3_covariance>>=
+optim_theta <- result3$par[-seq_len(ncol(X0))]
+covarianceFunction <- covarianceFactory(cov.wendland, cov.args3)
+<<covariance_curve>>
+@
+\caption{Direct misspecification ($\beta=\Sexpr{cov.args[["fixed_range_value"]]}$). \label{fig:method3-cov}}
+\end{subfigure}
+\begin{subfigure}{0.45\textwidth}
+\centering
+<<method4_covariance>>=
+optim_theta <- result4$par[-seq_len(ncol(X0))]
+covarianceFunction <- covarianceFactory(cov.wendland, cov.args4)
+<<covariance_curve>>
+@
+\caption{Both (\Sexpr{cov.args[["interp.num_support"]]} support points, $\beta=$\Sexpr{cov.args[["fixed_range_value"]]}). \label{fig:method4-cov}}
+\end{subfigure}
+\caption{Actual covariance function versus estimated covariance functions. \label{fig:methods-visual}}
+\end{figure}
+
+
+\begin{table}
+\centering
+\caption{Overview of results and computation time for all examples. \label{tab:mle-results}}
+<<example_mle_show_results, results='asis'>>=
+ind_beta <- seq_along(true_beta)
+est <- rbind(
+  c(true_beta, true_theta, NA),
+  c(result1$par, time1[3]),
+  c(result2$par, time2[3]),
+  c(result3$par[ind_beta], true_theta[1], result3$par[-ind_beta], time3[3]),
+  c(result4$par[ind_beta], true_theta[1], result4$par[-(ind_beta)], time4[3])
+)
+
+colnames(est) <- c("Intercept", "x-drift", "y-drift", "range", "sill",
+  "kappa", "mu", "nugget", "elapsed")
+rownames(est) <- c("Actual", "Exact", "Interpolation",
+  "Direct Misspecification", "Both")
+
+knitr::kable(est, format = "latex", digits = digits)
+@
+\end{table}
+
+%===============================================================================
+<<section05-cleanup, include=FALSE, eval = CLEANUP>>=
+options(default_opts)
+rm(list = ls())
+gc()
+@
