@@ -2,101 +2,63 @@
 
 \alias{neg2loglikFactory}
 
-
 \title{Function Factory for \code{neg2loglikelihood} with Unified Input Arguments}
 
-
 \description{
-  A function factory which generates a function of the form \code{function(parameters)}
-  which returns the neg2loglikelihood.
+A function factory which generates a function of the form \code{function(parameters)} which returns the neg2loglikelihood.
 }
 
 \usage{
-  neg2loglikFactory(y, X, distmat, covariance = NULL, cov.args = list(),
-                    chol.args = list(), Rstruct = NULL, covarianceFunction = NULL,
-                    choleskyFunction = NULL)
-}
-
-\value{
-  Returns function of the form \code{function(parameters)}.
+neg2loglikFactory(y, X, distmat, covariance = NULL, cov.args = list(),
+  chol.args = list(), Rstruct = NULL, covarianceFunction = NULL,
+  choleskyFunction = NULL)
 }
 
 \arguments{
-  \item{y}{
-    Numeric vector. Dependent variable.
-  }
+\item{y}{Numeric vector. Dependent variable.}
 
-  \item{X}{
-    Optional data.frame containing covariates.
-  }
+\item{X}{Optional data.frame containing covariates.}
 
-  \item{distmat}{
-    Distance matrix, either a numeric matrix or a spam object.
-  }
+\item{distmat}{Distance matrix, either a numeric matrix or a spam object.}
 
-  \item{covariance}{
-    A function which takes as input an object containing distances (h),
-    a vector of parameters (theta), and a list of optional settings (cov.args).
-  }
+\item{covariance}{A function which takes as input an object containing distances (h), a vector of parameters (theta), and a list of optional settings (cov.args).}
 
-  \item{cov.args}{
-    A list of optional settings for a covariance function.
-  }
+\item{cov.args}{A list of optional settings for a covariance function.}
 
-  \item{chol.args}{
-    A list of optional settings for a cholesky function.
+\item{chol.args}{A list of optional settings for a cholesky function.}
+
+\item{Rstruct}{A 'spam.chol.NgPeyton' object which represents the sparsity structure.}
+
+\item{covarianceFunction}{A function returned by \code{covarianceFactory()}.}
+
+\item{choleskyFunction}{A function returned by \code{choleskyFactory()}.}
 }
 
-  \item{Rstruct}{
-    A 'spam.chol.NgPeyton' object which represents the sparsity structure.
-  }
-
-  \item{covarianceFunction}{
-    A function returned by \code{covarianceFactory()}.
-  }
-
-  \item{choleskyFunction}{
-    A function returned by \code{choleskyFactory()}.
-  }
+\value{
+Returns function of the form \code{function(parameters)}.
 }
 
 \details{
+This function factory returns a function of the form \code{function(parameters)} which computes the neg2loglikelihood for given input parameters. The purpose of this is to reduce the number of arguments that need to be specified by the user in a call to \code{optim}, or \code{optimParallel}. Furthermore, the function detects whether the input distmat is a spam object, and autonomously selects the appropriate method for computing the neg2loglikelihood.
 
-  This function factory returns a function of the form \code{function(parameters)}
-  which computes the neg2loglikelihood for given input parameters. The purpose of this
-  is to reduce the number of arguments that need to be specified by the user in a call
-  to \code{optim}, or \code{optimParallel}. Furthermore, the function detects whether
-  the input distmat is a spam object, and autonomously selects the appropriate method
-  for computing the neg2loglikelihood.
+The function is intended to be called from within \code{\link{mleFactory}}, but is also exported by NAMESPACE for users wishing to make use of the function. There are two distinct strategies available for using the function.
 
-  The function is intended to be called from within \code{\link{mleFactory}}, but is
-  also exported by NAMESPACE for users wishing to make use of the function. There are
-  two distinct strategies available for using the function.
+\bold{Option 1}: the user may specify covariance, cov.args, chol.args, and Rstruct in the call. This syntax is more in line with the corresponding functions found in the \pkg{spam} package, yet still allows passing arguments for customizing the behaviour of the cholesky decomposition.
 
-  \bold{Option 1}: the user may specify covariance, cov.args, chol.args, and Rstruct in
-    the call. This syntax is more in line with the corresponding functions found in
-    the \pkg{spam} package, yet still allows passing arguments for customizing the
-    behaviour of the cholesky decomposition.
+\bold{Option 2}: the user may instead specify covarianceFunction and choleskyFunction, obtained from calls to \code{covarianceFactory} and \code{choleskyFactory}, respectively.
 
-  \bold{Option 2}: the user may instead specify covarianceFunction and choleskyFunction,
-    obtained from calls to \code{covarianceFactory} and \code{choleskyFactory},
-    respectively.
-
-  In both cases, the arguments y, X, and distmat are required input. Note that the two
-  options are equivalent, apart from the second option allowing for more concise code.
+In both cases, the arguments y, X, and distmat are required input. Note that the two options are equivalent, apart from the second option allowing for more concise code.
 }
 
 \references{
-  Hadley Wickham (2015) \emph{Advanced R}, CRC Press.
+Hadley Wickham (2015) \emph{Advanced R}, CRC Press.
 }
 
-\author{
-  Thomas Caspar Fischer
-}
+\author{Thomas Caspar Fischer}
 
 \seealso{
-  \code{\link{covarianceFactory}} and
-  \code{\link{choleskyFactory}}
+\code{\link{covarianceFactory}} and
+\code{\link{choleskyFactory}}
 }
 
 \examples{

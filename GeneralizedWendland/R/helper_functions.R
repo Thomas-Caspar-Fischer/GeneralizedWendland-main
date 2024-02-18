@@ -1,13 +1,4 @@
 
-isEmptyList <- function(list) {
-  return(is.null(unlist(list)))
-}
-
-
-mapPars.Wend2Askey <- function(theta){
-  return(theta[names(theta) != "kappa"])
-}
-
 # Function which assigns global values to cov.args in calls to cov.wendland
 control.wendland <- function(
   numint.abstol          = getOption("wendland.numint.abstol"),

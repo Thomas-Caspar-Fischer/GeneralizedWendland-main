@@ -5,55 +5,42 @@
 \title{Function factory for prediction generator}
 
 \description{
-  A function factory which generates a function for sampling from the predictive distribution
+A function factory which generates a function for sampling from the predictive distribution
 }
 
 \usage{
-  predictionFactory(y, locs0, locs1, covariance,
-  X0 = list2DF(nrow = nrow(locs0)), X1 = list2DF(nrow = nrow(locs1)),
-  ..., cov.args = list(), chol.args = list(), use_spam = TRUE)
+predictionFactory(y, locs0, locs1, covariance, X0 = list2DF(nrow = nrow(locs0)),
+  X1 = list2DF(nrow = nrow(locs1)), ..., cov.args = list(), chol.args = list(),
+  use_spam = TRUE)
 }
 
 \arguments{
-  \item{y}{
-    Observed measurements.
-  }
+\item{y}{Observed measurements.}
 
-  \item{locs0}{
-    Locations at which measurements were obtained.
-  }
-  \item{locs1}{
-    Locations at which to predict.
-  }
-  \item{covariance}{
-    Covariance function
-  }
-  \item{X0}{
-    Covariates. By default corresponds to an empty data.frame() with \code{nrow(locs0)} rows.
-  }
-  \item{X1}{
-    Covariates for new locations. By default corresponds to an empty data.frame() with \code{nrow(locs1)} rows.
-  }
-  \item{...}{
-    Additional arguments (currently unused).
-  }
-  \item{cov.args}{
-    Additional arguments for covariance function.
-  }
-  \item{chol.args}{
-    Additional arguments for cholesky function.
-  }
-  \item{use_spam}{
-    Logical value. Whether to use spam or not.
-  }
+\item{locs0}{Locations at which measurements were obtained.}
+
+\item{locs1}{Locations at which to predict.}
+
+\item{covariance}{Covariance function.}
+
+\item{X0}{Covariates. By default corresponds to an empty data.frame() with \code{nrow(locs0)} rows.}
+
+\item{X1}{Covariates for new locations. By default corresponds to an empty data.frame() with \code{nrow(locs1)} rows.}
+
+\item{...}{Additional arguments. Unused.}
+
+\item{cov.args}{Additional arguments for covariance function.}
+
+\item{chol.args}{Additional arguments for function used to compute cholesky decomposition.}
+
+\item{use_spam}{Logical value. If TRUE, use spam to compute predictions.}
 }
 
 \value{
-  Returns a function of the form \code{function(n, param)}, where n corresponds to the number of simulations to run, and param is a parameter vector as returned by \code{optim}.
+Returns a function of the form \code{function(n, param)}, where n corresponds to the number of simulations to run, and param is a parameter vector as returned by \code{optim}.
 }
 
 \author{Thomas Caspar Fischer}
-
 
 \examples{
 set.seed(23)

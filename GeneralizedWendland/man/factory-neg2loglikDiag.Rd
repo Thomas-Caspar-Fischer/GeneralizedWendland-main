@@ -5,7 +5,7 @@
 \title{Diagnostics for arbitrarily specified, likelihood-based Gaussian process models}
 
 \description{
-  A helper function for rapidly exploring the parameter space around the maximum likelihood estimate
+A helper function for rapidly exploring the parameter space around the maximum likelihood estimate
 }
 
 \usage{
@@ -13,56 +13,35 @@ neg2loglikDiagFactory(y, X = data.frame(), distmat, covariance, ...)
 }
 
 \value{
-  Returns a function of the form
-  \code{function(theta_list, cov.args_list = list(), chol.args_list = list())} which
-  returns a \code{data.frame} containing the neg2loglikelihood at all permutations of the
-  provided arguments.
+Returns a function of the form \code{function(theta_list, cov.args_list = list(), chol.args_list = list())} which returns a \code{data.frame} containing the neg2loglikelihood at all permutations of the provided arguments.
 }
 
 \arguments{
-  \item{y}{
-    Dependent variable
-  }
+\item{y}{Dependent variable}
 
-  \item{X}{
-    Optional design matrix with covariates
-  }
+\item{X}{Optional design matrix with covariates}
 
-  \item{distmat}{
-    Distance matrix. Can be provided either as a dense matrix or spam object.
-  }
+\item{distmat}{Distance matrix. Can be provided either as a dense matrix or spam object.}
 
-  \item{covariance}{
-    Covariance function.
-  }
+\item{covariance}{Covariance function.}
 
-  \item{...}{
-    Other arguments to be passed on.
-  }
+\item{...}{Other arguments to be passed on.}
 }
 
 \details{
-  \describe{
-    \item{theta_list}{
-      Named list of vectors with parameters to be passed to covariance.
-    }
 
-    \item{cov.args_list (default = \code{list()})}{
-      Named list of vectors with arguments to be passed to covariance
-    }
+\describe{
+\item{theta_list}{Named list of vectors with parameters to be passed to covariance.}
 
-    \item{chol.args_list (default = \code{list()})}{
-      Named list of vectors with arguments to be passed to \code{\link{choleskyFactory}}.
-    }
-  }
+\item{cov.args_list (default = \code{list()})}{Named list of vectors with arguments to be passed to covariance}
+
+\item{chol.args_list (default = \code{list()})}{Named list of vectors with arguments to be passed to \code{\link{choleskyFactory}}.}
+
+}
 }
 
 \note{
-  The function manufactured by \code{neg2loglikDiagFactory} in principle
-  also accepts covariance functions generated using \code{\link{covarianceFactory}},
-  However, the function is not yet compatible with the arguments
-  \code{fixed_range_value} and \code{fixed_nugget_value}. For now, these should
-  be left at default when using \code{\link{covarianceFactory}}.
+The function manufactured by \code{neg2loglikDiagFactory} in principle also accepts covariance functions generated using \code{\link{covarianceFactory}}. However, the function is not yet compatible with the arguments \code{fixed_range_value} and \code{fixed_nugget_value}. For now, these should be left at default when using \code{\link{covarianceFactory}}.
 }
 
 \author{Thomas Caspar Fischer}
