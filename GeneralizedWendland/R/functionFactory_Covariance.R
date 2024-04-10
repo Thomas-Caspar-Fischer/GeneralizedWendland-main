@@ -19,7 +19,7 @@ covarianceFactory <- function(covariance, cov.args = list()){
   #######################################################################
   # Function blueprint
   #----------------------------------------------------------------------
-  covarianceFunction <- function(h, theta, ...) {
+  covarianceFunction <- function(h, theta, ..., ) {
 
     theta <- c(fixed_range, theta, fixed_nugget)
     result <- covariance(h = h, theta = theta, ..., cov.args = cov.args)

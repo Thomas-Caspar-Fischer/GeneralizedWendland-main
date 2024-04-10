@@ -141,12 +141,26 @@ Eigen::MatrixXd Wendland::computeMatrix(const Eigen::MatrixXd& dmat){
 
 
 Eigen::SparseMatrix<double> Wendland::computeMSparse(const Eigen::SparseMatrix<double>& dmat){
-  double d, value;
+  double d, value, mdsum;
   int row, col;
   int nrow = dmat.rows();
   int ncol = dmat.cols();
   bool is_square = (nrow == ncol);
+  bool is_symm = false;
 
+  if (is_square){
+    for (int k=0; k<dmat.outerSize(); ++k){
+      for (Eigen::SparseMatrix<double>::InnerIterator it(dmat,k); it; ++it){
+        d = it.value();
+        row = it.row();
+        col = it.col();
+
+        if (row == col)
+          mdsum += d;
+      }
+    }
+    is_square = (mdsum > 0.0);
+  }
   Eigen::SparseMatrix<double> cmat(nrow, ncol);
   Eigen::Matrix<int, Eigen::Dynamic, Eigen::Dynamic> computed(nrow, ncol);
   computed.setZero();
@@ -168,7 +182,7 @@ Eigen::SparseMatrix<double> Wendland::computeMSparse(const Eigen::SparseMatrix<d
           tripletList.push_back(Eigen::Triplet<double>(row,col,value));
           computed(row,col)=1;
 
-          if (is_square && !computed(col,row) && (d == dmat.coeff(col,row))){
+          if (is_square && is_symm && !computed(col,row) && (d == dmat.coeff(col,row))){
             tripletList.push_back(Eigen::Triplet<double>(col,row,value));
             computed(col,row)=1;
           }
@@ -185,10 +199,24 @@ Eigen::SparseMatrix<double> Wendland::computeMSparse(const Eigen::SparseMatrix<d
 }
 
 Rcpp::List Wendland::computeSpam(const Eigen::MatrixXi& index, const Eigen::VectorXd& values){
-  double value;
+  double value, mdsum;
+  bool is_square = (index.rows() == index.cols());
+  bool is_symm = false;
   int counter = 0;
   std::tuple<int,int,double> key, tkey;
   std::map<std::tuple<int,int,double>, double> map;
+
+  if (is_square){
+    for (int r=0; r<index.rows();r++){
+      key = std::tuple<int,int,double>(index(r,0),index(r,1),values(r));
+
+      if (std::get<0>(key) == std::get<1>(key)){
+        mdsum += std::get<2>(key);
+      }
+    }
+
+    is_symm = (mdsum > 0.0);
+  }
 
   for (int r=0; r<index.rows();r++){
     key = std::tuple<int,int,double>(index(r,0),index(r,1),values(r));
@@ -199,7 +227,7 @@ Rcpp::List Wendland::computeSpam(const Eigen::MatrixXi& index, const Eigen::Vect
 
     } else {
 
-      if (map.find(tkey) != map.end()){
+      if (is_square && is_symm && map.find(tkey) != map.end()){
         value = map.find(tkey)->second;
 
       } else {
